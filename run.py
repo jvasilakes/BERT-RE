@@ -25,7 +25,7 @@ def parse_args():
     parser.add_argument("--do_lower_case", type=int, default=0, choices=[0, 1],
                         help="""0: cased BERT models.
                                 1 (default): uncased BERT models.""")
-    parser.add_argument("--models", type=int, nargs="*",
+    parser.add_argument("--models", type=int, nargs="*", default=[],
                         help="""Models to run. 1: standard CLS,
                                                2: entity CLS,
                                                3: entity start""")
@@ -73,7 +73,7 @@ def run_standard_cls(bert_model_dir, do_lower_case):
 # Input: Entity
 # Head: Dense layer from [CLS] embedding
 # Corresponds to Matching the Blanks Figure 3d.
-def run_entity_cls(bert_model_dir, do_lower_case):
+def run_entity_marker_cls(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.EntityProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
@@ -107,9 +107,9 @@ def run_entity_cls(bert_model_dir, do_lower_case):
 
 # Model 3
 # Input: Entity
-# Head: Concatenate entity start tokens -> Dense layer
+# Head: Concatenate entity start token reps -> dense
 # Corresponds to Matching the Blanks Figure 3f.
-def run_entity_start(bert_model_dir, do_lower_case):
+def run_entity_marker_start(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.EntityStartProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
@@ -128,7 +128,7 @@ def run_entity_start(bert_model_dir, do_lower_case):
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
-    processed_inputs = processor.process(docs["entity"])  # noqa
+    processed_inputs = processor.process(docs["entity"])
     word_ids, token_type_ids, e1_masks, e2_masks = processed_inputs
     inputs = [word_ids, token_type_ids, e1_masks, e2_masks]
     loss = model.evaluate(inputs, np.array([1]))
@@ -146,10 +146,102 @@ def run_entity_start(bert_model_dir, do_lower_case):
     print(f"Loss: {loss}")
 
 
+# Model 4
+# Input: Standard + entity mentions
+# Head: Max pool over entity mention wordpiece reps -> concat -> dense
+# Corresponds to Matching the Blanks Figure 3b.
+def run_standard_mention_pool(bert_model_dir, do_lower_case):
+    vocab_file = os.path.join(bert_model_dir, "vocab.txt")
+    processor = input_processors.EntityMentionProcessor(
+            vocab_file=vocab_file, do_lower_case=do_lower_case,
+            max_seq_length=128)
+
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    # Make sure BERT takes the additional entity tokens into account
+    bert_params["vocab_size"] = processor.vocab_size
+    head = classification_heads.EntityMentionPoolHead(
+            n_classes=1, out_activation="sigmoid",
+            bias_initializer="zeros", dropout_rate=0.0)
+
+    inputs = processor.get_input_placeholders()
+    model = models.get_bert_classifier(inputs, bert_params, head)
+    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    loss_fn = "binary_crossentropy"
+    model.compile(optimizer=opt, loss=loss_fn)
+
+    e1_mentions = ["He"]
+    e2_mentions = ["store"]
+    processed_inputs = processor.process(
+            docs["standard"], e1_mentions, e2_mentions)
+    word_ids, token_type_ids, e1_masks, e2_masks = processed_inputs
+    inputs = [word_ids, token_type_ids, e1_masks, e2_masks]
+    loss = model.evaluate(inputs, np.array([1]))
+
+    print()
+    print("=== Entity Mention Pool ===")
+    print(docs["standard"])
+    print(e1_mentions, e2_mentions)
+    print(processor._all_raw_tokens)
+    print(word_ids)
+    print(token_type_ids)
+    print(e1_masks)
+    print(e2_masks)
+    print()
+    model.summary()
+    print(f"Loss: {loss}")
+
+
+# Model 5
+# Input: Entity markers
+# Head: Max pool over entity mention wordpiece reps -> concat -> dense
+# Corresponds to Matching the Blanks Figure 3e.
+def run_entity_marker_mention_pool(bert_model_dir, do_lower_case):
+    vocab_file = os.path.join(bert_model_dir, "vocab.txt")
+    processor = input_processors.EntityMentionProcessor(
+            vocab_file=vocab_file, do_lower_case=do_lower_case,
+            max_seq_length=128)
+
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    # Make sure BERT takes the additional entity tokens into account
+    bert_params["vocab_size"] = processor.vocab_size
+    head = classification_heads.EntityMentionPoolHead(
+            n_classes=1, out_activation="sigmoid",
+            bias_initializer="zeros", dropout_rate=0.0)
+
+    inputs = processor.get_input_placeholders()
+    model = models.get_bert_classifier(inputs, bert_params, head)
+    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    loss_fn = "binary_crossentropy"
+    model.compile(optimizer=opt, loss=loss_fn)
+
+    e1_mentions = ["He"]
+    e2_mentions = ["store"]
+    processed_inputs = processor.process(
+            docs["entity"], e1_mentions, e2_mentions)
+    word_ids, token_type_ids, e1_masks, e2_masks = processed_inputs
+    inputs = [word_ids, token_type_ids, e1_masks, e2_masks]
+    loss = model.evaluate(inputs, np.array([1]))
+
+    print()
+    print("=== Entity Mention Pool ===")
+    print(docs["entity"])
+    print(e1_mentions, e2_mentions)
+    print(processor._all_raw_tokens)
+    print(word_ids)
+    print(token_type_ids)
+    print(e1_masks)
+    print(e2_masks)
+    print()
+    model.summary()
+    print(f"Loss: {loss}")
+
+
 if __name__ == "__main__":
     model_map = {1: run_standard_cls,
-                 2: run_entity_cls,
-                 3: run_entity_start,
+                 2: run_entity_marker_cls,
+                 3: run_entity_marker_start,
+                 4: run_standard_mention_pool,
+                 5: run_entity_marker_mention_pool
                  }
 
     args = parse_args()

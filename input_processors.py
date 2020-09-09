@@ -146,7 +146,6 @@ class EntityStartProcessor(EntityProcessor):
                 shape=inshape, dtype=tf.bool, name="e1_start_mask")
         e2_start_mask = tf.keras.layers.Input(
                 shape=inshape, dtype=tf.bool, name="e2_start_mask")
-
         return [word_ids, token_type_ids, e1_start_mask, e2_start_mask]
 
     def _get_entity_start_masks(self, tokens):
@@ -154,11 +153,89 @@ class EntityStartProcessor(EntityProcessor):
         Returns a boolean mask corresponding to the indices of [E1] and [E2]
         in tokens.
         """
-        e1_mask = np.zeros(shape=(self.max_seq_length,), dtype=int)
-        e1_mask[np.argwhere(np.array(tokens) == self.e1_start_token)] = 1
-        e2_mask = np.zeros(shape=(self.max_seq_length,), dtype=int)
-        e2_mask[np.argwhere(np.array(tokens) == self.e2_start_token)] = 1
+        e1_mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
+        e1_mask[np.argwhere(np.array(tokens) == self.e1_start_token)] = True
+        if e1_mask.sum() == 0:
+            raise ValueError(f"Can't find token [E1] in input: {tokens}")
+        if e1_mask.sum() > 1:
+            raise ValueError(f"Too many [E1] tokens in input: {tokens}")
+
+        e2_mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
+        e2_mask[np.argwhere(np.array(tokens) == self.e2_start_token)] = True
+        if e2_mask.sum() == 0:
+            raise ValueError(f"Can't find token [E2] in input: {tokens}")
+        if e2_mask.sum() > 1:
+            raise ValueError(f"Too many [E2] tokens in input: {tokens}")
         return e1_mask, e2_mask
+
+
+class EntityMentionProcessor(StandardProcessor):
+    """
+    Input:
+      [CLS] entity1 ... entity2 ... [SEP]
+
+    Returns:
+      [word_ids, token_type_ids, entity1_mention_mask, entity2_mention_mask]
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def process(self, documents, e1_mentions, e2_mentions):
+        self._all_raw_tokens = []
+        all_token_ids = []
+        all_token_type_ids = []
+        all_e1_mention_masks = []
+        all_e2_mention_masks = []
+        for (i, doc) in enumerate(documents):
+            tokens = self.tokenizer.tokenize(doc)
+            tokens = self.cut_tokens(tokens)
+            self._all_raw_tokens.append(tokens)
+            token_ids = self._get_token_ids(tokens)
+            token_type_ids = self._get_token_type_ids(tokens)
+
+            e1_tokens = self.tokenizer.tokenize(e1_mentions[i])
+            e1_mask = self._get_subsequence_mask(tokens, e1_tokens)
+            if e1_mask is None:
+                msg = f"Bad e1 in input:\n {tokens}\n {e1_tokens}"
+                raise ValueError(msg)
+            e2_tokens = self.tokenizer.tokenize(e2_mentions[i])
+            e2_mask = self._get_subsequence_mask(tokens, e2_tokens)
+            if e2_mask is None:
+                msg = f"Bad e2 in input:\n {tokens}\n {e2_tokens}"
+                raise ValueError(msg)
+
+            all_token_ids.append(token_ids)
+            all_token_type_ids.append(token_type_ids)
+            all_e1_mention_masks.append(e1_mask)
+            all_e2_mention_masks.append(e2_mask)
+        return_val = [np.array(all_token_ids),
+                      np.array(all_token_type_ids),
+                      np.array(all_e1_mention_masks),
+                      np.array(all_e2_mention_masks)]
+        return return_val
+
+    def get_input_placeholders(self):
+        inshape = (self.max_seq_length,)
+        word_ids = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.int32, name="word_ids")
+        token_type_ids = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.int32, name="token_type_ids")
+        e1_mention_mask = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.bool, name="e1_mention_mask")
+        e2_mention_mask = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.bool, name="e2_mention_mask")
+        return [word_ids, token_type_ids, e1_mention_mask, e2_mention_mask]
+
+    def _get_subsequence_mask(self, seq, subseq):
+        mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
+        j = 0
+        for (i, t) in enumerate(seq):
+            if j == len(subseq):
+                return mask
+            if t == subseq[j]:
+                mask[i] = True
+                j += 1
+        return None
 
 
 class PositionalEmbeddingProcessor(InputProcessor):
