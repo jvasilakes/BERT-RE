@@ -14,15 +14,21 @@ tf.random.set_seed(0)
 docs = {"standard": ["[CLS] He went to the store. [SEP]"],
         "entity": ["[CLS] [E1]He[\\E1] went to the [E2]store[\\E2]. [SEP]"],
         }
-
-bert_model_dir = "/media/jav/JakeDrive/BERT_models/uncased_L-12_H-768_A-12/"
-do_lower_case = True
 n_classes = 1
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("models", type=int, nargs="*")
+    parser.add_argument("--bert_model_dir", type=str, required=True,
+                        help="""Directory containing BERT model checkpoint.
+                                E.g. uncased_L-12_H-768_A-12/""")
+    parser.add_argument("--do_lower_case", type=int, default=0, choices=[0, 1],
+                        help="""0: cased BERT models.
+                                1 (default): uncased BERT models.""")
+    parser.add_argument("--models", type=int, nargs="*",
+                        help="""Models to run. 1: standard CLS,
+                                               2: entity CLS,
+                                               3: entity start""")
     return parser.parse_args()
 
 
@@ -30,7 +36,7 @@ def parse_args():
 # Input: Standard (no entity markers)
 # Head: Dense layer from [CLS] embedding
 # Corresponds to Matching the Blanks Figure 3a.
-def run_standard_cls():
+def run_standard_cls(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.StandardProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
@@ -51,9 +57,6 @@ def run_standard_cls():
 
     word_ids, token_type_ids = processor.process(docs["standard"])
     loss = model.evaluate([word_ids, token_type_ids], np.array([1]))
-    print()
-    print(model.input_shape)
-    print()
 
     print()
     print("=== Standard CLS ===")
@@ -70,7 +73,7 @@ def run_standard_cls():
 # Input: Entity
 # Head: Dense layer from [CLS] embedding
 # Corresponds to Matching the Blanks Figure 3d.
-def run_entity_cls():
+def run_entity_cls(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.EntityProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
@@ -106,7 +109,7 @@ def run_entity_cls():
 # Input: Entity
 # Head: Concatenate entity start tokens -> Dense layer
 # Corresponds to Matching the Blanks Figure 3f.
-def run_entity_start():
+def run_entity_start(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.EntityStartProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
@@ -155,4 +158,4 @@ if __name__ == "__main__":
         model_nums = model_map.keys()
 
     for model_num in model_nums:
-        model_map[model_num]()
+        model_map[model_num](args.bert_model_dir, args.do_lower_case)
