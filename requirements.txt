@@ -1,0 +1,2 @@
+bert-for-tf2
+tensorflow>=2.0.0
