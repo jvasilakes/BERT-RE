@@ -87,14 +87,14 @@ class StandardProcessor(InputProcessor):
 class EntityProcessor(StandardProcessor):
     """
     Input:
-      [CLS] [E1]first entity[\\E1] ... [E2]second entity[\\E2] ... [SEP]
+      [CLS] [E1]first entity[/E1] ... [E2]second entity[/E2] ... [SEP]
 
     Returns:
       [word_ids, token_type_ids]
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.entity_tokens = ["[E1]", "[\\E1]", "[E2]", "[\\E2]"]
+        self.entity_tokens = ["[E1]", "[/E1]", "[E2]", "[/E2]"]
         added = self.tokenizer.add_tokens(self.entity_tokens)
         if added != len(self.entity_tokens):
             raise ValueError("Failed to add some entity tokens to the tokenizer.")  # noqa
@@ -103,7 +103,7 @@ class EntityProcessor(StandardProcessor):
 class EntityStartProcessor(EntityProcessor):
     """
     Input:
-      [CLS] [E1]first entity[\\E1] ... [E2]second entity[\\E2] ... [SEP]
+      [CLS] [E1]first entity[/E1] ... [E2]second entity[/E2] ... [SEP]
 
     Returns:
       [word_ids, token_type_ids, e1_start_mask, e2_start_mask]
@@ -169,19 +169,23 @@ class EntityStartProcessor(EntityProcessor):
         return e1_mask, e2_mask
 
 
-class EntityMentionProcessor(StandardProcessor):
+class EntityMentionProcessor(EntityProcessor):
     """
     Input:
-      [CLS] ... entity1 ... entity2 ... [SEP]
+      [CLS] [E1]first entity[/E1] ... [E2]second entity[/E2] ... [SEP]
 
     Returns:
-      [word_ids, token_type_ids, entity1_mention_mask, entity2_mention_mask]
-    """
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+      [word_ids, token_type_ids]
 
-    # TODO: Use character offsets instead of entity mention text
-    def process(self, documents, e1_mentions, e2_mentions):
+    keep_entity_markers: default True: If False, remove entity
+                         markers ([E1], [E2], etc.) from the input,
+                         to make it equivalent to Standard input.
+    """
+    def __init__(self, keep_entity_markers=True, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keep_entity_markers = keep_entity_markers
+
+    def process(self, documents):
         tokenized = []
         all_token_ids = []
         all_token_type_ids = []
@@ -190,21 +194,23 @@ class EntityMentionProcessor(StandardProcessor):
         for (i, doc) in enumerate(documents):
             tokens = self.tokenizer.tokenize(doc)
             tokens = self.cut_tokens(tokens)
-            tokenized.append(tokens)
+
+            e1_mask, e2_mask = self._get_entity_mention_masks(tokens)
+
+            if self.keep_entity_markers is False:
+                drop_idxs = [i for (i, t) in enumerate(tokens)
+                             if t in self.entity_tokens]
+                tokens = np.delete(tokens, drop_idxs)
+                backfill = np.zeros(shape=(len(drop_idxs),), dtype=int)
+                e1_mask = np.delete(e1_mask, drop_idxs)
+                e1_mask = np.concatenate([e1_mask, backfill])
+                e2_mask = np.delete(e2_mask, drop_idxs)
+                e2_mask = np.concatenate([e2_mask, backfill])
+
             token_ids = self._get_token_ids(tokens)
             token_type_ids = self._get_token_type_ids(tokens)
 
-            e1_tokens = self.tokenizer.tokenize(e1_mentions[i])
-            e1_mask = self._get_subsequence_mask(tokens, e1_tokens)
-            if e1_mask is None:
-                msg = f"Bad e1 in input:\n {tokens}\n {e1_tokens}"
-                raise ValueError(msg)
-            e2_tokens = self.tokenizer.tokenize(e2_mentions[i])
-            e2_mask = self._get_subsequence_mask(tokens, e2_tokens)
-            if e2_mask is None:
-                msg = f"Bad e2 in input:\n {tokens}\n {e2_tokens}"
-                raise ValueError(msg)
-
+            tokenized.append(tokens)
             all_token_ids.append(token_ids)
             all_token_type_ids.append(token_type_ids)
             all_e1_mention_masks.append(e1_mask)
@@ -221,22 +227,29 @@ class EntityMentionProcessor(StandardProcessor):
                 shape=inshape, dtype=tf.int32, name="word_ids")
         token_type_ids = tf.keras.layers.Input(
                 shape=inshape, dtype=tf.int32, name="token_type_ids")
-        e1_mention_mask = tf.keras.layers.Input(
-                shape=inshape, dtype=tf.bool, name="e1_mention_mask")
-        e2_mention_mask = tf.keras.layers.Input(
-                shape=inshape, dtype=tf.bool, name="e2_mention_mask")
-        return [word_ids, token_type_ids, e1_mention_mask, e2_mention_mask]
+        e1_mask = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.bool, name="e1_mask")
+        e2_mask = tf.keras.layers.Input(
+                shape=inshape, dtype=tf.bool, name="e2_mask")
+        return [word_ids, token_type_ids, e1_mask, e2_mask]
 
-    def _get_subsequence_mask(self, seq, subseq):
-        mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
-        j = 0
-        for (i, t) in enumerate(seq):
-            if j == len(subseq):
-                return mask
-            if t == subseq[j]:
-                mask[i] = True
-                j += 1
-        return None
+    def _get_entity_mention_masks(self, tokens):
+        e1_mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
+        e2_mask = np.zeros(shape=(self.max_seq_length,), dtype=bool)
+        in_e1 = False
+        in_e2 = False
+        for (i, t) in enumerate(tokens):
+            if t in self.entity_tokens:
+                if t in ["[E1]", "[/E1]"]:
+                    in_e1 = not in_e1
+                elif t in ["[E2]", "[/E2]"]:
+                    in_e2 = not in_e2
+            else:
+                if in_e1 is True:
+                    e1_mask[i] = True
+                elif in_e2 is True:
+                    e2_mask[i] = True
+        return e1_mask, e2_mask
 
 
 class PositionalEmbeddingProcessor(InputProcessor):

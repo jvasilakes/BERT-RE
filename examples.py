@@ -10,7 +10,7 @@ from bert_re import get_bert_classifier, input_processors, heads
 tf.random.set_seed(0)
 
 docs = {"standard": ["[CLS] He went to the store. [SEP]"],
-        "entity": ["[CLS] [E1]He[\\E1] went to the [E2]store[\\E2]. [SEP]"],
+        "entity": ["[CLS] [E1]He[/E1] went to the [E2]store[/E2]. [SEP]"],
         }
 n_classes = 1
 
@@ -143,9 +143,10 @@ def run_entity_marker_start(bert_model_dir, do_lower_case):
 # Corresponds to Matching the Blanks Figure 3b.
 def run_standard_mention_pool(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
+    # keep_entity_markers=False on entity input is equivalent to standard input
     processor = input_processors.EntityMentionProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
-            max_seq_length=128)
+            max_seq_length=128, keep_entity_markers=False)
 
     bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
     # Make sure BERT takes the additional entity tokens into account
@@ -160,16 +161,12 @@ def run_standard_mention_pool(bert_model_dir, do_lower_case):
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
-    e1_mentions = ["He"]
-    e2_mentions = ["store"]
-    bert_inputs, tokenized_docs = processor.process(
-            docs["standard"], e1_mentions, e2_mentions)
+    bert_inputs, tokenized_docs = processor.process(docs["entity"])
     loss = model.evaluate(bert_inputs, np.array([1]))
 
     print()
     print("=== Entity Mention Pool ===")
-    print(docs["standard"])
-    print(e1_mentions, e2_mentions)
+    print(docs["entity"])
     print(tokenized_docs)
     print(bert_inputs)
     print()
@@ -185,7 +182,7 @@ def run_entity_marker_mention_pool(bert_model_dir, do_lower_case):
     vocab_file = os.path.join(bert_model_dir, "vocab.txt")
     processor = input_processors.EntityMentionProcessor(
             vocab_file=vocab_file, do_lower_case=do_lower_case,
-            max_seq_length=128)
+            max_seq_length=128, keep_entity_markers=True)
 
     bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
     # Make sure BERT takes the additional entity tokens into account
@@ -200,16 +197,12 @@ def run_entity_marker_mention_pool(bert_model_dir, do_lower_case):
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
-    e1_mentions = ["He"]
-    e2_mentions = ["store"]
-    bert_inputs, tokenized_docs = processor.process(
-            docs["entity"], e1_mentions, e2_mentions)
+    bert_inputs, tokenized_docs = processor.process(docs["entity"])
     loss = model.evaluate(bert_inputs, np.array([1]))
 
     print()
     print("=== Entity Mention Pool ===")
     print(docs["entity"])
-    print(e1_mentions, e2_mentions)
     print(tokenized_docs)
     print(bert_inputs)
     print()
