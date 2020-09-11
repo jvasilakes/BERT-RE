@@ -1,6 +1,9 @@
 import bert
 import tensorflow as tf
 
+from . import input_processors  # noqa : F401 '.input_processors' imported but unused
+from . import heads  # noqa : F401 '.heads' imported but unused
+
 
 def get_bert_classifier(inputs, bert_params, classification_head):
     if len(inputs) < 2:
