@@ -75,6 +75,7 @@ of epochs completed before validation loss stopped improving.
 |  3e    |    0.82   |  0.82    | 0.82   |  2717   |       4        |
 |  3f    |    0.82   |  0.83    | 0.82   |  2717   |       3        |
 
+View the training logs on [Tensorboard dev](https://tensorboard.dev/experiment/J2J7PtbWT3eOCMz80z1QLA/)
 
 
 ## Acknowledgments
