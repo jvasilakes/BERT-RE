@@ -1,6 +1,6 @@
 import os
-import argparse
 import bert
+import argparse
 import numpy as np
 import tensorflow as tf
 
@@ -24,9 +24,12 @@ def parse_args():
                         help="""0: cased BERT models.
                                 1 (default): uncased BERT models.""")
     parser.add_argument("--models", type=int, nargs="*", default=[],
-                        help="""Models to run. 1: standard CLS,
-                                               2: entity CLS,
-                                               3: entity start""")
+                        help="""Models to run.
+                                    1: run_standard_cls,
+                                    2: run_entity_marker_cls,
+                                    3: run_entity_marker_start,
+                                    4: run_standard_mention_pool,
+                                    5: run_entity_marker_mention_pool""")
     return parser.parse_args()
 
 
@@ -40,17 +43,17 @@ def run_standard_cls(bert_model_dir, do_lower_case):
             vocab_file=vocab_file, do_lower_case=do_lower_case,
             max_seq_length=128)
 
-    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
-    # Make sure BERT takes any additional tokens into account
-    bert_params["vocab_size"] = processor.vocab_size
     head = heads.CLSHead(n_classes=1, out_activation="sigmoid",
                          bias_initializer="zeros", dropout_rate=0.0)
 
     inputs = processor.get_input_placeholders()
-    model = get_bert_classifier(inputs, bert_params, head)
-    input_shape = [inp.shape for inp in inputs]
-    model.build(input_shape=input_shape)
-    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    bert_params["vocab_size"] = processor.vocab_size
+    model_ckpt = os.path.join(args.bert_model_dir, "bert_model.ckpt")
+    # Calls model.build()
+    model = get_bert_classifier(inputs, bert_params, model_ckpt, head)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
@@ -77,14 +80,16 @@ def run_entity_marker_cls(bert_model_dir, do_lower_case):
             vocab_file=vocab_file, do_lower_case=do_lower_case,
             max_seq_length=128)
 
-    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
-    # Make sure BERT takes the additional entity tokens into account
-    bert_params["vocab_size"] = processor.vocab_size
     head = heads.CLSHead(n_classes=1, out_activation="sigmoid",
                          bias_initializer="zeros", dropout_rate=0.0)
     inputs = processor.get_input_placeholders()
-    model = get_bert_classifier(inputs, bert_params, head)
-    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    bert_params["vocab_size"] = processor.vocab_size
+    model_ckpt = os.path.join(args.bert_model_dir, "bert_model.ckpt")
+    # Calls model.build()
+    model = get_bert_classifier(inputs, bert_params, model_ckpt, head)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
@@ -111,16 +116,18 @@ def run_entity_marker_start(bert_model_dir, do_lower_case):
             vocab_file=vocab_file, do_lower_case=do_lower_case,
             max_seq_length=128)
 
-    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
-    # Make sure BERT takes the additional entity tokens into account
-    bert_params["vocab_size"] = processor.vocab_size
     head = heads.EntityStartHead(
             n_classes=1, out_activation="sigmoid",
             bias_initializer="zeros", dropout_rate=0.0)
 
     inputs = processor.get_input_placeholders()
-    model = get_bert_classifier(inputs, bert_params, head)
-    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    bert_params["vocab_size"] = processor.vocab_size
+    model_ckpt = os.path.join(args.bert_model_dir, "bert_model.ckpt")
+    # Calls model.build()
+    model = get_bert_classifier(inputs, bert_params, model_ckpt, head)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
@@ -148,16 +155,18 @@ def run_standard_mention_pool(bert_model_dir, do_lower_case):
             vocab_file=vocab_file, do_lower_case=do_lower_case,
             max_seq_length=128, keep_entity_markers=False)
 
-    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
-    # Make sure BERT takes the additional entity tokens into account
-    bert_params["vocab_size"] = processor.vocab_size
     head = heads.EntityMentionPoolHead(
             n_classes=1, out_activation="sigmoid",
             bias_initializer="zeros", dropout_rate=0.0)
 
     inputs = processor.get_input_placeholders()
-    model = get_bert_classifier(inputs, bert_params, head)
-    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    bert_params["vocab_size"] = processor.vocab_size
+    model_ckpt = os.path.join(args.bert_model_dir, "bert_model.ckpt")
+    # Calls model.build()
+    model = get_bert_classifier(inputs, bert_params, model_ckpt, head)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 
@@ -184,16 +193,18 @@ def run_entity_marker_mention_pool(bert_model_dir, do_lower_case):
             vocab_file=vocab_file, do_lower_case=do_lower_case,
             max_seq_length=128, keep_entity_markers=True)
 
-    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
-    # Make sure BERT takes the additional entity tokens into account
-    bert_params["vocab_size"] = processor.vocab_size
     head = heads.EntityMentionPoolHead(
             n_classes=1, out_activation="sigmoid",
             bias_initializer="zeros", dropout_rate=0.0)
 
     inputs = processor.get_input_placeholders()
-    model = get_bert_classifier(inputs, bert_params, head)
-    opt = tf.keras.optimizers.Adam(learning_rate=2e-5)
+    bert_params = bert.params_from_pretrained_ckpt(bert_model_dir)
+    bert_params["vocab_size"] = processor.vocab_size
+    model_ckpt = os.path.join(args.bert_model_dir, "bert_model.ckpt")
+    # Calls model.build()
+    model = get_bert_classifier(inputs, bert_params, model_ckpt, head)
+
+    opt = tf.keras.optimizers.Adam(learning_rate=3e-5)
     loss_fn = "binary_crossentropy"
     model.compile(optimizer=opt, loss=loss_fn)
 

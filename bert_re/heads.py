@@ -42,9 +42,11 @@ class MaskLayer(tf.keras.layers.Layer):
         else:
             # We're not actually operating over ragged tensors.
             # We need to use ragged.boolean_mask to preserve the input shape.
-            masked = tf.ragged.boolean_mask(inputs, mask).to_tensor()
+            masked = tf.ragged.boolean_mask(inputs, mask)
         if keep_dims is False:
-            masked = tf.squeeze(masked)
+            masked = tf.squeeze(masked, axis=1)
+        else:
+            masked = masked.to_tensor()
         return masked
 
 
@@ -83,15 +85,19 @@ class CLSHead(tf.keras.layers.Layer):
         # Layers
         self.drop_layer = tf.keras.layers.Dropout(rate=self.dropout_rate)
         self.pred_layer = tf.keras.layers.Dense(
-                self.n_classes, activation=self.out_activation,
+                self.n_classes, activation=out_activation,
                 bias_initializer=self.bias_initializer,
-                name="prediction")
-        self.layers = [self.drop_layer, self.pred_layer]
+                name="predictions")
 
     def call(self, bert_output):
-        cls = bert_output[:, 0, :]  # [CLS] token
-        dropped = self.drop_layer(cls)
-        return self.pred_layer(dropped)
+        x = bert_output[:, 0, :]  # [CLS] token
+        x = self.drop_layer(x)
+        x = self.pred_layer(x)
+        return x
+
+    def get_config(self):
+        config = super().get_config()
+        return config
 
 
 class EntityStartHead(tf.keras.layers.Layer):
@@ -125,11 +131,11 @@ class EntityStartHead(tf.keras.layers.Layer):
                        self.concat, self.drop_layer, self.pred_layer]
 
     def call(self, bert_output, e1_mask, e2_mask):
-        e1 = self.e1_mask_layer(bert_output, e1_mask)
-        e2 = self.e2_mask_layer(bert_output, e2_mask)
+        e1 = self.e1_mask_layer(bert_output, e1_mask, keep_dims=False)
+        e2 = self.e2_mask_layer(bert_output, e2_mask, keep_dims=False)
         dense_input = self.concat([e1, e2])
-        dropped = self.drop_layer(dense_input)
-        return self.pred_layer(dropped)
+        dense_input = self.drop_layer(dense_input)
+        return self.pred_layer(dense_input)
 
 
 class EntityMentionPoolHead(tf.keras.layers.Layer):
@@ -167,5 +173,5 @@ class EntityMentionPoolHead(tf.keras.layers.Layer):
         e1_max = self.e1_max(e1_mention)
         e2_max = self.e2_max(e2_mention)
         dense_input = self.concat([e1_max, e2_max])
-        dropped = self.drop_layer(dense_input)
-        return self.pred_layer(dropped)
+        dense_input = self.drop_layer(dense_input)
+        return self.pred_layer(dense_input)
