@@ -42,6 +42,7 @@ python run_semeval.py --model_id ${MODEL_ID} \
 ```
 
 Where `${MODEL_ID}` is one of `3a, 3b, 3d, 3e, 3f`.
+
 Model `3c` is not yet implemented.
 
 The training dataset of 8000 examples was randomly split into 80% training (6400 examples)
@@ -79,6 +80,9 @@ of epochs completed before validation loss stopped improving.
 ## Acknowledgments
 
 SemEval2010 Task 8 data obtained from [sahitya0000](https://github.com/sahitya0000/Relation-Classification)
+
 Pretrained BERT-base weights obtained from [the official Google release](https://github.com/google-research/bert)
+
 BERT layer implemented using [BERT for Tensorflow v2](https://github.com/kpe/bert-for-tf2)
+
 Tokenization borrowed from the [Hugging Face Transformers Library](https://github.com/huggingface/transformers/tree/master/src/transformers)
