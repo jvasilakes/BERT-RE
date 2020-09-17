@@ -30,7 +30,7 @@ python setup.py develop
 See `examples.py` for usage.
 
 
-## SemEval2010 Task 8 benchmarks
+## SemEval2010 Task 8
 
 ```
 python run_semeval.py --model_id ${MODEL_ID} \
@@ -41,19 +41,21 @@ python run_semeval.py --model_id ${MODEL_ID} \
 		      --learning_rate 3e-5 --batch_size 16 --epochs 10
 ```
 
-Where `${MODEL_ID}` is one of `3a, 3b, 3d, 3e, 3f}`.
+Where `${MODEL_ID}` is one of `3a, 3b, 3d, 3e, 3f`.
+Model `3c` is not yet implemented.
 
 The training dataset of 8000 examples was randomly split into 80% training (6400 examples)
 and 20% (1600 examples) using `sklearn.train_test_split` with `random_state=0`.
 
 Each model was trained with the following hyper-parameters:
 
-> Learning rate: Linear Warmup to 3e-5 at step 400 followed by polynomial decay.
-> Batch size: 16
-> Optimizer: Adam (epsilon = 1e-8)
-> Loss: Categorical Cross Entropy from softmax activations
-> Classification layer dropout rate: 0.1
-> Early stopping monitoring validation loss.
+ * **BERT model**: BERT-base
+ * **Learning rate**: Linear warmup to 3e-5 at step 400 followed by polynomial decay.
+ * **Batch size**: 16
+ * **Optimizer**: Adam (epsilon = 1e-8)
+ * **Loss**: Categorical cross entropy from softmax activations
+ * **Classification layer dropout rate**: 0.1
+ * **Epochs**: Early stopping monitoring validation loss.
 
 Note that unlike the paper, we use a dense layer with softmax activations for computing output probabilities,
 rather than layer normalization with linear activations. 
@@ -77,9 +79,6 @@ of epochs completed before validation loss stopped improving.
 ## Acknowledgments
 
 SemEval2010 Task 8 data obtained from [sahitya0000](https://github.com/sahitya0000/Relation-Classification)
-
 Pretrained BERT-base weights obtained from [the official Google release](https://github.com/google-research/bert)
-
 BERT layer implemented using [BERT for Tensorflow v2](https://github.com/kpe/bert-for-tf2)
-
 Tokenization borrowed from the [Hugging Face Transformers Library](https://github.com/huggingface/transformers/tree/master/src/transformers)
